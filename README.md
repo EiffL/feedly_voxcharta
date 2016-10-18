@@ -2,6 +2,9 @@
 
 Simple script to upvote papers on voxcharta from list of papers tagged on feedly.
 
+DISCLAIMER: USE WITH CAUTION, THE VOXCHARTA INTERACTIONS DO NOT RELY ON AN API BUT INSTEAD ON A MANUAL PARSING OF THE 
+WEBSITE AND COULD EASILY BREAK. USE AT YOUR OWN RISKS !!!
+
 [Feedly](https://feedly.com) is a nice feed aggregator that you can use to manage your daily arxiv feed. Once you have subscribed to an arXiv feed, you can easily
 tag the papers you find interesting.
 
