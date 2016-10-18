@@ -1,15 +1,48 @@
+#!/usr/bin/python2
 import requests
+import ConfigParser
 from urllib import quote
 from bs4 import BeautifulSoup
 import time
+import os
+
+sample_config = """
+[feedly]
+user_id = xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxx
+token = YourAuthToken
+newer_than = 24
+
+[voxcharta]
+institution = harvard
+username = a_einstein
+password = xxxxxxxxxx
+"""
+
+config_path = "~/.feedly_voxcharta/config.cfg"
 
 feedly_url = "http://cloud.feedly.com/v3/"
 voxcharta_url = "http://%s.voxcharta.org/"
 voxcharta_login_url = "http://voxcharta.org/wp-login.php"
 
-def get_feedly_arxiv_ids(user_id, token, since=24):
+def get_feedly_arxiv_ids(user_id, token, newer_than=24):
     """
     Retrieves the list of recently marked arxiv id from feedly feed
+
+    Parameters
+    ----------
+    user_id: string
+        Feedly user id
+
+    token: string
+        Feedly personal developer token
+
+    newer_than: int
+        Number of hours in the past
+
+    Returns
+    -------
+    arxivIds: list of strings
+        List of arxiv id
     """
     headers={'Authorization':token}
     tag =u"user/"+user_id+"/tag/global.saved"
@@ -19,7 +52,7 @@ def get_feedly_arxiv_ids(user_id, token, since=24):
     r = requests.get(feedly_url+'streams/'+qtag+'/contents',
                      headers=headers,
                      params={'count':1000,
-                             'newerThan': int(time.time() - since*3600)*1000})
+                             'newerThan': int(time.time() - newer_than*3600)*1000})
 
     # Get all the arxiv references
     arxivIds =[]
@@ -33,7 +66,20 @@ def get_feedly_arxiv_ids(user_id, token, since=24):
 def get_voxcharta_postIDs(arxivIds, institution='harvard'):
     """
     Given a list of arxivIds, retrieves the voxcharta post ids
-    in a convenient dictionary
+    in a convenient dictionary.
+
+    Parameters
+    ----------
+    arxivIds: list of string
+        List of arxiv ids to get a postID for.
+
+    institution: string
+        Institution to use for the subdomain on voxcharta
+
+    Returns
+    -------
+    postIDs: dict
+        Dictionary matching each arxiv id with a voxcharta post id
     """
     url = voxcharta_url%institution
     postIDs = {}
@@ -56,6 +102,25 @@ def get_voxcharta_postIDs(arxivIds, institution='harvard'):
 def upvote_voxcharta_postIDs(postIDs, username, password, institution='harvard'):
     """
     Upvote the given list of id on arxiv
+
+    Parameters
+    ----------
+    postIDs: list of string
+        IDs of the posts to upvote
+
+    username: string
+        voxcharta username
+
+    password: string
+        voxcharta password
+
+    institution: string
+        Institution to use for the subdomain on voxcharta
+
+    Returns
+    -------
+    success: bool
+        Return True if everything is successful
     """
     login_data = {'log':username,'pwd':password}
 
@@ -87,9 +152,45 @@ def upvote_voxcharta_postIDs(postIDs, username, password, institution='harvard')
     for pid in postIDs:
         r = session.get(vote_url%(uid,pid))
         if r.ok:
-            "Successfully upvoted postID %s"%pid
+            print "Successfully upvoted postID %s"%pid
         else:
             print "Error when upvoting postID %s"%pid
             return False
 
     return True
+
+# Main function
+if __name__ == '__main__':
+    # Check that the configuration exists
+    if not os.path.isfile(os.path.expanduser(config_path)):
+        print "Configuration file not found at default path: %s"%config_path
+        print "Please create this file using the following template:"
+        print "-----------------------------------------------------"
+        print sample_config
+        print "-----------------------------------------------------"
+        exit(-1)
+
+    config = ConfigParser.ConfigParser()
+    config.read(os.path.expanduser(config_path))
+
+    # Retrieve list of arxivIDs tagged in feedly in the last 24 hours
+    arxivIDs = get_feedly_arxiv_ids(user_id=config.get('feedly','user_id'),
+                                    token=config.get('feedly','token'),
+                                    newer_than=int(config.get('feedly','newer_than')))
+
+    # Get the corresponding postIDs on voxcharta
+    postIDs = get_voxcharta_postIDs(arxivIDs, institution=config.get('voxcharta','institution'))
+
+    print "Upvoting the following arxiv ids: ", postIDs.keys()
+
+    success = upvote_voxcharta_postIDs(postIDs.values(),
+                         username=config.get('voxcharta','username'),
+                         password=config.get('voxcharta','password'),
+                         institution=config.get('voxcharta','institution'))
+
+    if success:
+        print "Success !"
+        exit(0)
+    else:
+        print  "Fail !"
+        exit(-1)
